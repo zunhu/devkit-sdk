@@ -44,8 +44,6 @@ extern "C"
 
 #define MAX_WSGI_HANDLERS 32
 
-static struct httpd_wsgi_call *calls[MAX_WSGI_HANDLERS];
-
 /** @brief  Register a WSGI handler
  *
  *  @note   WSGI handlers declared must be registered with the
@@ -152,7 +150,11 @@ int httpd_purge_headers(int sock);
  */
 int httpd_get_data(httpd_request_t *req, char *content, int length);
 
+/* Initialise the WSGI handler data structures */
 int httpd_wsgi_init(void);
+
+/* Check if there are any matching WSGI all_wsgi_calls, and if so, execute them. */
+int httpd_wsgi(httpd_request_t *req_p);
 
 #ifdef __cplusplus
 }

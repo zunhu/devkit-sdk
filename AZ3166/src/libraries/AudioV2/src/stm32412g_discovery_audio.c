@@ -94,7 +94,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32412g_discovery_audio.h"
-
+#include "cmsis_nvic.h"
 
 #define DFSDM_OVER_SAMPLING(__FREQUENCY__) \
         (__FREQUENCY__ == AUDIO_FREQUENCY_8K)  ? 256 \
@@ -167,6 +167,8 @@ static void I2Sx_Out_DeInit(void);
 
 extern void AUDIO_OUT_I2Sx_DMAx_IRQHandler(void);
 extern void AUDIO_IN_I2Sx_DMAx_IRQHandler(void);
+extern void DFSDMx_ChannelMspDeInit();
+extern void DFSDMx_FilterMspDeInit();
 
 /* STM32412G_DISCOVERY_AUDIO_OUT_Private_Functions STM32412G Discovery Audio Out Private Functions */
 
@@ -240,6 +242,7 @@ uint8_t BSP_AUDIO_IN_OUT_Init(uint16_t OutputDevice, uint32_t AudiosampleBitLeng
 uint8_t BSP_AUDIO_STOP()
 {
     HAL_I2S_DMAStop(&haudio_i2s);
+    return 0;
 }
 
 /**
@@ -250,12 +253,10 @@ uint8_t BSP_AUDIO_STOP()
  */
 uint8_t BSP_AUDIO_In_Out_Transfer(uint16_t *pBuffer, uint16_t *pBuffer_read, uint32_t Size)
 {
-    int ret = 0;
     /* Update the Media layer and enable it for play */
-    ret = HAL_I2SEx_TransmitReceive_DMA(&haudio_i2s, pBuffer, pBuffer_read, DMA_MAX(Size));
+    HAL_I2SEx_TransmitReceive_DMA(&haudio_i2s, pBuffer, pBuffer_read, DMA_MAX(Size));
 
     // HAL_I2SEx_TransmitReceive(&haudio_i2s,pBuffer,pBuffer_read,(Size/2),0xFFFFFF);
-
     return AUDIO_OK;
 }
 
@@ -500,7 +501,7 @@ void HAL_I2S_ErrorCallback( I2S_HandleTypeDef *hi2s )
 __weak void BSP_AUDIO_OUT_MspInit(I2S_HandleTypeDef *hi2s, void *Params)
 {
     static DMA_HandleTypeDef hdma_i2s_tx;
-    static DMA_HandleTypeDef hdma_i2s_rx;
+    //static DMA_HandleTypeDef hdma_i2s_rx;
     GPIO_InitTypeDef GPIO_InitStruct;
     /* Peripheral clock enable */
     __HAL_RCC_SPI2_CLK_ENABLE();
@@ -574,7 +575,7 @@ __weak void BSP_AUDIO_OUT_MspInit(I2S_HandleTypeDef *hi2s, void *Params)
 
     /* I2S DMA IRQ Channel configuration */
     HAL_NVIC_SetPriority(AUDIO_OUT_I2Sx_DMAx_IRQ, AUDIO_OUT_IRQ_PREPRIO, 0);
-    NVIC_SetVector(AUDIO_OUT_I2Sx_DMAx_IRQ, AUDIO_OUT_I2Sx_DMAx_IRQHandler);
+    NVIC_SetVector(AUDIO_OUT_I2Sx_DMAx_IRQ, (uint32_t)AUDIO_OUT_I2Sx_DMAx_IRQHandler);
     HAL_NVIC_EnableIRQ(AUDIO_OUT_I2Sx_DMAx_IRQ);
 }
 
@@ -881,7 +882,7 @@ static void I2Sx_In_MspInit(void)
 
     /* I2S DMA IRQ Channel configuration */
     HAL_NVIC_SetPriority(AUDIO_IN_I2Sx_DMAx_IRQ, AUDIO_IN_IRQ_PREPRIO, 0);
-    NVIC_SetVector(AUDIO_IN_I2Sx_DMAx_IRQ, AUDIO_IN_I2Sx_DMAx_IRQHandler);
+    NVIC_SetVector(AUDIO_IN_I2Sx_DMAx_IRQ, (uint32_t)AUDIO_IN_I2Sx_DMAx_IRQHandler);
     HAL_NVIC_EnableIRQ(AUDIO_IN_I2Sx_DMAx_IRQ);
 }
 
@@ -1060,6 +1061,35 @@ uint8_t BSP_AUDIO_IN_SetVolume(uint8_t Volume)
 
     /* Return AUDIO_OK when all operations are correctly done */
     return AUDIO_OK;
+}
+
+/**
+ * @brief  Read the device id
+ * @retval The nau88c10 device id
+ */
+uint16_t BSP_AUDIO_IN_ReadId()
+{
+    return (uint16_t)nau88c10_drv.ReadID(AUDIO_I2C_READ_ADDRESS);
+}
+
+/**
+ * @brief  Read the nau88c10 register
+ * @param  reg: The register to read.
+ * @retval The register value
+ */
+uint16_t BSP_AUDIO_IN_ReadRegister(uint16_t reg)
+{
+    return (uint16_t)nau88c10_drv.ReadRegister(AUDIO_I2C_READ_ADDRESS, reg);
+}
+
+/**
+ * @brief  Write the nau88c10 register
+ * @param  reg: The register to read.
+ * @param  value: The value to write.
+ */
+void BSP_AUDIO_IN_WriteRegister(uint16_t reg, uint16_t value)
+{
+    nau88c10_drv.WriteRegister(AUDIO_I2C_READ_ADDRESS, reg, value);
 }
 
 /**

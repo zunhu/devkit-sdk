@@ -14,7 +14,7 @@
 static uint32_t _sampleRate;
 static uint16_t _sampleBitDepth;
 static uint8_t _channels;
-static uint8_t _durationInSeconds;
+//static uint8_t _durationInSeconds;
 
 static char _play_buffer[AUDIO_CHUNK_SIZE];
 static char _record_buffer[AUDIO_CHUNK_SIZE];
@@ -321,12 +321,47 @@ int AudioClass::convertToMono(char* audioBuffer, int size, int sampleBitLength)
 
 bool AudioClass::setVolume(uint8_t volume)
 {
-    if (volume < 0 || volume > 100)
+    if (volume > 100)
     {
         return false;
     }
 
     return BSP_AUDIO_OUT_SetVolume(volume) == AUDIO_OK ? true : false;
+}
+
+uint16_t AudioClass::readRegister(uint16_t registerAddress)
+{
+    return (uint16_t)BSP_AUDIO_IN_ReadRegister(registerAddress);
+}
+
+void AudioClass::writeRegister(uint16_t registerAddress, uint16_t value)
+{
+    BSP_AUDIO_IN_WriteRegister(registerAddress, value);
+}
+
+void AudioClass::enableLevelControl(uint8_t maxGain, uint8_t minGain)
+{    
+    if (maxGain > 7) maxGain = 7;
+    if (minGain > 7) minGain = 7;
+    BSP_AUDIO_IN_WriteRegister(0x20, 0x100 + ((uint16_t)maxGain << 3) + minGain);
+}
+
+void AudioClass::disableLevelControl()
+{
+    BSP_AUDIO_IN_WriteRegister(0x20, 0x38); // default value is disabled.
+}
+
+void AudioClass::setPGAGain(uint8_t gain)
+{
+    disableLevelControl();
+    if (gain > 0x3F){
+        gain = 0x3F;
+    }
+    // The signal from the PGA stage to the PGA Boost Mixer is disconnected or muted by setting PGAMT[6] address
+    // (0x2D) to HIGH. In this path, the PGA boost can be a fixed value of +20dB or 0dB, controlled by the PGABST[8]
+    // address (0x2F) bit.  We'll leave PGAZC and PGAMT set to zero.  PGAMT of zero means Input PGA not muted.
+    // PGAZC is only relevant if ALC is enabled.
+    BSP_AUDIO_IN_WriteRegister(0x2D, gain);
 }
 
 /*------------------------------------------------------------------------------

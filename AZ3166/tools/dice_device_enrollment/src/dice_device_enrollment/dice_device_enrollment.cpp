@@ -67,8 +67,8 @@ static char* get_user_input(const char* text_value, int max_len)
 		char input[fileNameLength + 2];
 		fgets(input, fileNameLength + 2, stdin);
 		int index = 0, inputIndex = 0;
-		while (inputIndex < strlen(input) && isspace(input[inputIndex])) ++inputIndex;
-		while (index < max_len && inputIndex < strlen(input) && isprint(input[inputIndex])) {
+		while (inputIndex < (int)strlen(input) && isspace(input[inputIndex])) ++inputIndex;
+		while (index < max_len && inputIndex < (int)strlen(input) && isprint(input[inputIndex])) {
 			result[index++] = input[inputIndex++];
 		}
 		result[index] = 0;
@@ -132,9 +132,9 @@ static int registrationIdValidated()
 	for (int i = 0; i < length; i++)
 	{
 		if ((registrationId[i] >= 'a' && registrationId[i] <= 'z')
-				|| (registrationId[i] >= '0' && registrationId[i] <= '9')
-				|| (registrationId[i] == '-')
-		   ) {
+			|| (registrationId[i] >= '0' && registrationId[i] <= '9')
+			|| (registrationId[i] == '-')
+			) {
 			continue;
 		}
 		else {
@@ -227,7 +227,7 @@ static int validateInputFiles()
 // Prepare DICE|RIOT data
 static int autoGenRegistrationId()
 {
-	for (int i = 0; i < strlen(firmwareVer); i++) {
+	for (int i = 0; i < (int)strlen(firmwareVer); i++) {
 		if (firmwareVer[i] == '.') {
 			firmwareVer[i] = 'v';
 		}
@@ -353,57 +353,167 @@ uint8_t* getBinFileWithName(const char *startName, const char *endName, uint32_t
 	return buf;
 }
 
-int exitFunction(int result){
+int exitFunction(int result) {
 	(void)printf("Press any key to continue:\r\n");
 	(void)getchar();
 	return result;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// App start
-int main()
+// Parse command arguments
+static int parseCommandArguments(int argc, char * argv[])
 {
-	fileName = get_user_input("Input the name of your project, default name is \"DevKitDPS\" :", fileNameLength);
-	if (strlen(fileName) == 0)
+	if (argc < 2)
 	{
-		strcpy(fileName, "DevKitDPS");
+		return 1;
 	}
+	
+	for (int i = 1; i < argc; i++)
+	{
+		if (argv[i][0] != '-')
+		{
+			return -1;
+		}
+		switch (argv[i][1])
+		{
+		case 'b':
+		case 'B':
+			// The full path of the .bin file
+			if (i + 1 < argc)
+			{
+				i++;
+				strncpy(binFileFullPath, argv[i], sizeof(binFileFullPath));
+				if (fileFullPathValidated(binFileFullPath) != 0)
+				{
+					return -1;
+				}
+			}
+			else
+			{
+				return -1;
+			}
+			break;
+		case 'm':
+		case 'M':
+			// The full path of the .map file
+			if (i + 1 < argc)
+			{
+				i++;
+				strncpy(mapFileFullPath, argv[i], sizeof(mapFileFullPath));
+				if (fileFullPathValidated(mapFileFullPath) != 0)
+				{
+					return -1;
+				}
+			}
+			else
+			{
+				return -1;
+			}
+			break;
+		case 'u':
+		case 'U':
+			// UDS
+			if (i + 1 < argc)
+			{
+				i++;
+				udsString = strdup(argv[i]);
+			}
+			else
+			{
+				return -1;
+			}
+			break;
+		case 'i':
+		case 'I':
+			// The Registration ID
+			if (i + 1 < argc)
+			{
+				i++;
+				registrationId = strdup(argv[i]);
+			}
+			else
+			{
+				return -1;
+			}
+			break;
+		default:
+			return -1;
+		}
+	}
+	return 0;
+}
 
-	// Check sanity of input files - .bin and .map
-	if (validateInputFiles() != 0) {
+static void printHelp(void)
+{
+	printf("dps_cert_gen.exe -b <Bin file> -m <Map file> -u <UDS> -i <Registration ID>.\n");
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// App start
+int main(int argc, char * argv[])
+{
+	binFileFullPath[0] = 0;
+	mapFileFullPath[0] = 0;
+	registrationId = NULL;
+	udsString = NULL;
+
+	int result = parseCommandArguments(argc, argv);
+	if (result == -1)
+	{
+		printHelp();
 		return exitFunction(1);
 	}
+	else if (result == 1)
+	{
+		// Enter interact mode
+		fileName = get_user_input("Input the name of your project, default name is \"DevKitDPS\" :", fileNameLength);
+		if (strlen(fileName) == 0)
+		{
+			strcpy(fileName, "DevKitDPS");
+		}
+		// Check sanity of input files - .bin and .map
+		if (validateInputFiles() != 0)
+		{
+			return exitFunction(1);
+		}
+		// Get user input
+		udsString = get_user_input("Input the UDS you saved into security chip of your DevKit: ", 64);
+		
+		// Registration ID
+		registrationId = get_user_input("Input your preferred registrationId as you input in DPS.ino(Click Enter to skip if no registrationId provided in DPS.ino): ", 128);
+		if (strlen(registrationId) == 0)
+		{
+			macAddress = get_user_input("Input the Mac Address on your DevKit: ", 12);
+			if (macAddressValidated() != 0)
+			{
+				return exitFunction(1);
+			}
+			firmwareVer = get_user_input("Input the firmware version of the program running on your DevKit: ", 5);
+			if (firmwareVerValidated() != 0)
+			{
+				return exitFunction(1);
+			}
 
-	// Get user input
-	udsString = get_user_input("Input the UDS you saved into security chip of your DevKit: ", 64);
-	if (udsStringValidated() != 0) {
+			// Auto Generate registrationId based on firmware version and device MAC address
+			autoGenRegistrationId();
+		}
+	}
+	// Validate the UDS
+	if (udsStringValidated() != 0)
+	{
 		return exitFunction(1);
 	}
-	else {
+	else
+	{
 		// Prepare UDS from udsString
 		getUDSBytesFromString();
 	}
-
-	registrationId = get_user_input("Input your preferred registrationId as you input in DPS.ino(Click Enter to skip if no registrationId provided in DPS.ino): ", 128);
-	if (strlen(registrationId) == 0) {
-		macAddress = get_user_input("Input the Mac Address on your DevKit: ", 12);
-		if (macAddressValidated() != 0) {
-			return exitFunction(1);
-		}
-		firmwareVer = get_user_input("Input the firmware version of the program running on your DevKit: ", 5);
-		if (firmwareVerValidated() != 0) {
-			return exitFunction(1);
-		}
-
-		// Auto Generate registrationId based on firmware version and device MAC address
-		autoGenRegistrationId();
+	// Validate the Registration ID
+	if (registrationIdValidated())
+	{
+		return exitFunction(1);
 	}
-	else {
-		if (registrationIdValidated()) {
-			return exitFunction(1);
-		}
-	}
-
+	
 	// Get start address of flash from .bin file
 	unsigned long int resultAddress;
 	resultAddress = findAddressInMapFile(flashStartname);

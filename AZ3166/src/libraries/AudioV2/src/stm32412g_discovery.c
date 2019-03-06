@@ -136,7 +136,7 @@ const uint16_t COM_TX_AF[COMn] = { DISCOVERY_COM1_TX_AF };
 const uint16_t COM_RX_AF[COMn] = { DISCOVERY_COM1_RX_AF };
 
 static I2C_HandleTypeDef hI2cAudioHandler;
-static I2C_HandleTypeDef hI2cExtHandler;
+//static I2C_HandleTypeDef hI2cExtHandler;
 
 /**
  * @}
@@ -152,7 +152,7 @@ static HAL_StatusTypeDef I2Cx_ReadMultiple( I2C_HandleTypeDef *i2c_handler, uint
                                             uint16_t MemAddSize, uint8_t *Buffer, uint16_t Length );
 static HAL_StatusTypeDef I2Cx_WriteMultiple( I2C_HandleTypeDef *i2c_handler, uint8_t Addr, uint16_t Reg,
                                              uint16_t MemAddSize, uint8_t *Buffer, uint16_t Length );
-static HAL_StatusTypeDef I2Cx_IsDeviceReady( I2C_HandleTypeDef *i2c_handler, uint16_t DevAddress, uint32_t Trials );
+//static HAL_StatusTypeDef I2Cx_IsDeviceReady( I2C_HandleTypeDef *i2c_handler, uint16_t DevAddress, uint32_t Trials );
 static void I2Cx_Error( I2C_HandleTypeDef *i2c_handler, uint8_t Addr );
 
 static void FMC_BANK1_WriteData( uint16_t Data );
@@ -405,10 +405,10 @@ static HAL_StatusTypeDef I2Cx_WriteMultiple( I2C_HandleTypeDef *i2c_handler,
  * @param  Trials: Number of trials
  * @retval HAL status
  */
-static HAL_StatusTypeDef I2Cx_IsDeviceReady( I2C_HandleTypeDef *i2c_handler, uint16_t DevAddress, uint32_t Trials )
-{
-    return (HAL_I2C_IsDeviceReady( i2c_handler, DevAddress, Trials, 1000 ));
-}
+//static HAL_StatusTypeDef I2Cx_IsDeviceReady( I2C_HandleTypeDef *i2c_handler, uint16_t DevAddress, uint32_t Trials )
+//{
+//    return (HAL_I2C_IsDeviceReady( i2c_handler, DevAddress, Trials, 1000 ));
+//}
 
 /**
  * @brief  Manages error callback by re-initializing I2C.
@@ -664,38 +664,37 @@ void AUDIO_IO_DeInit( void )
  * @brief  Writes a single data.
  * @param  Addr: I2C address
  * @param  Reg: Reg address
- * @param  Value: Data to be written
+ * @param  Value: 9-bit data to be written
  */
 void AUDIO_IO_Write( uint8_t Addr, uint16_t Reg, uint16_t Value )
 {
-    uint16_t tmp = Value;
+    uint8_t lowbyte = (uint8_t)Value;
+    uint8_t hibyte = (uint8_t)(Value >> 8);
 
-    uint16_t reg_write = ((uint16_t)( Reg << 1 ) | ((Value >> 8)));
+    // 12.9.1.2. 2-WIRE Write Operation, the 9th bit is included in the register address byte.
+    uint16_t reg_write = ((uint16_t)( Reg << 1 ) | (hibyte & 0x1));
 
-    Value = (uint8_t)( tmp );
+    I2Cx_WriteMultiple( &hI2cAudioHandler, Addr, reg_write, I2C_MEMADD_SIZE_8BIT, &lowbyte, 1 );
 
-    I2Cx_WriteMultiple( &hI2cAudioHandler, Addr, reg_write, I2C_MEMADD_SIZE_8BIT, (uint8_t*) &Value, 1 );
 }
 
 /**
  * @brief  Reads a single data.
  * @param  Addr: I2C address
  * @param  Reg: Reg address
- * @retval Data to be read
+ * @retval 9-bit data to be read
  */
 uint16_t AUDIO_IO_Read( uint8_t Addr, uint16_t Reg )
 {
-    uint16_t read_value = 0, tmp = 0;
+    uint8_t read_value[2] = {0,0};
 
-    I2Cx_ReadMultiple( &hI2cAudioHandler, Addr, Reg, I2C_MEMADD_SIZE_8BIT, (uint8_t*) &read_value, 2 );
+    I2Cx_ReadMultiple( &hI2cAudioHandler, Addr, (uint16_t)( Reg << 1 ), I2C_MEMADD_SIZE_8BIT, read_value, 2 );
 
-    tmp = ((uint16_t)( read_value >> 8 ) & 0x00FF);
+    // flip the bits into little endian
+    uint16_t tmp = read_value[1] + (((uint16_t)read_value[0]) << 8);
 
-    tmp |= ((uint16_t)( read_value << 8 ) & 0xFF00);
+    return tmp;
 
-    read_value = tmp;
-
-    return read_value;
 }
 
 /**
