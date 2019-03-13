@@ -7,7 +7,7 @@ trigger:
 - master
 
 pool:
-  vmImage: 'https://devkit-build-1/DefaultCollection/_admin/_AgentPool'
+  vmImage: 'devkit-build-1/DefaultCollection/_admin/_agentpool'
 
 steps:
 - script: echo Hello, world!
