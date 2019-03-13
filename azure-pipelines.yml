@@ -7,7 +7,7 @@ trigger:
 - master
 
 pool:
-  vmImage: 'Ubuntu-16.04'
+  vmImage: 'https://devkit-build-1/DefaultCollection/_admin/_AgentPool'
 
 steps:
 - script: echo Hello, world!
